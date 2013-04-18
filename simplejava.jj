@@ -1,0 +1,492 @@
+options {
+  IGNORE_CASE=false;
+}
+
+PARSER_BEGIN(simplejava)
+
+public class simplejava {
+}
+
+PARSER_END(simplejava)
+
+TOKEN_MGR_DECLS : 
+{ 
+	public static int numComments = 0;
+}
+
+SKIP : 
+{
+    	< " " >
+|	< "\t">
+|	< "\n">
+|	< "//" (~["\n"])* "\n" >
+
+}
+
+SKIP : 
+{
+	< "/*" > { numComments++; SwitchTo(IN_COMMENT); } 
+}
+
+TOKEN : 
+{
+	< ELSE: "else">
+|	< FOR: "for">
+|	< WHILE: "while">
+|	< DO : "do">
+|	< TRUE : "true">
+|	< FALSE : "false">
+|	< CLASS : "class">
+|	< LEFT_PARENTHESIS : "(">
+|	< RIGHT_PARENTHESIS : ")">
+|	< LEFT_CURLY_BRACE : "{">
+|	< RIGHT_CURLY_BRACE : "}">
+|	< LEFT_SQUARE_BRACE : "[">
+|	< RIGHT_SQUARE_BRACE : "]">
+|	< IF : "if">
+|	< RETURN : "return">
+|	< NEW : "new">
+|	< PLUS : "+">
+|	< MINUS : "-">
+|	< TIMES : "*">
+|	< DIVIDE : "/">
+|	< DOT : ".">
+|	< COMMA : ",">
+|	< SEMICOLON : ";">
+|	< GETS : "=">
+|	< EQUALS : "==">
+|	< NOT_EQUALS : "!=">
+|	< INC_DOWN : "--">
+|	< INC_UP : "++">
+|	< LESS_THAN : "<">
+|	< GREATER_THAN : ">">
+|	< LESS_THAN_OR_EQUAL : "<=">
+|	< GREATER_THAN_OR_EQUAL : ">=">
+|	< AND : "&&">
+|	< OR : "||">
+|	< NOT : "!">
+|	< IDENTIFIER :(["A"-"Z"] | ["a" - "z"] | "_")(["A"-"Z","0"-"9", "a"-"z","_"])*> 
+|	< INTEGER_LITERAL: (["0"-"9"])+>
+
+}
+
+
+
+<IN_COMMENT>
+SKIP :
+{
+	< "/*" > { numComments++; }
+|	< "*/" > { numComments--; if(numComments == 0) SwitchTo(DEFAULT); }
+	
+}
+
+<IN_COMMENT>
+SKIP:
+{
+	< ~[] > 
+}	
+
+ASTProgram program():
+{Token t; ASTClasses classes = null; ASTClass classs; ASTFunctionDefinitions funcDefs = null; ASTFunctionDefinition funcDef;}
+{
+	(classs = classDef()   {if(classes == null) 
+                    		   classes = new ASTClasses(classs);
+                 			else
+                    		   classes.addElement(classs);})* 
+    (funcDef = funcDecl()   {if(funcDefs == null)
+                                funcDefs = new ASTFunctionDefinitions(funcDef);
+                             else
+                                funcDefs.addElement(funcDef);})* 
+    t = <EOF>
+    {return new ASTProgram(classes, funcDefs, t.beginLine);}
+}
+
+ASTClass classDef():
+{Token name; ASTInstanceVariableDefs instVars = null;}
+{
+	<CLASS> name = <IDENTIFIER> <LEFT_CURLY_BRACE> instVars = varDef(instVars) <RIGHT_CURLY_BRACE>
+	{return new ASTClass(name.image, instVars, name.beginLine);}
+}
+
+ASTInstanceVariableDefs varDef(ASTInstanceVariableDefs instVars):
+{ASTInstanceVariableDef instVar; Token type; Token name; int arrDim = 0;}
+{
+	type = <IDENTIFIER> name = <IDENTIFIER> arrDim = arrayDim(arrDim) <SEMICOLON> 
+	{instVar = new ASTInstanceVariableDef(type.image, name.image, arrDim, type.beginLine);}
+	{if(instVars != null) instVars.addElement(instVar); else instVars = new ASTInstanceVariableDefs(instVar);} varDef(instVars)
+	{return instVars;}
+|	{return instVars;}
+}
+
+int arrayDim(int arrDim):
+{}
+{
+	<LEFT_SQUARE_BRACE> <RIGHT_SQUARE_BRACE> arrDim = arrayDim(arrDim) {return arrDim + 1;}
+|	{return arrDim;}
+}
+
+ASTFunctionDefinition funcDecl():
+{Token type; Token name; ASTFormals formals; ASTFunctionDefinition funcDef;}
+{
+	type = <IDENTIFIER> name = <IDENTIFIER> <LEFT_PARENTHESIS> formals = formParamList() 
+		<RIGHT_PARENTHESIS> funcDef = funcDeclS(type, name, formals)
+		{return funcDef;}
+}
+
+ASTFunctionDefinition funcDeclS(Token type, Token name, ASTFormals formals):
+{ASTStatement body;}
+{
+	funcProto()	{return new ASTPrototype(type.image, name.image, formals, type.beginLine);}
+|	body = funcDef() {return new ASTFunction(type.image, name.image, formals, body, type.beginLine);}
+}
+
+void funcProto():
+{}
+{
+	<SEMICOLON>
+}
+
+ASTFormals formParamList():
+{ASTFormals formals = null; ASTFormal formal;}
+{
+	formal = formParam() {formals = new ASTFormals(formal);} formals = formParamListS(formals) 
+	{return formals;}
+|	{return formals;}
+}
+
+ASTFormals formParamListS(ASTFormals formals):
+{ASTFormal formal;}
+{
+	<COMMA> formal = formParam() {formals.addElement(formal);} formals = formParamListS(formals) {return formals;}
+|	{return formals;}
+}
+
+ASTFormal formParam():
+{Token type; Token name; int arrDim = 0;}
+{
+	type = <IDENTIFIER> name = <IDENTIFIER> arrDim = arrayDim(arrDim)
+	{return new ASTFormal(type.image, name.image, arrDim, type.beginLine);}
+}
+
+ASTStatement funcDef():
+{ASTStatements stats = null; ASTStatement stat; Token t;}
+{
+	t = <LEFT_CURLY_BRACE> 
+	(stat = statement()   
+	 {if(stats != null) stats.addElement(stat); else stats = new ASTStatements(stat);})* 
+	<RIGHT_CURLY_BRACE>
+	{if(stats == null) stats = new ASTStatements(); return stats;}
+}
+
+ASTStatement statement():
+{ASTStatement stat; Token name;}
+{
+	name = <IDENTIFIER> stat = statementS(name) <SEMICOLON> {return stat;}
+|	stat = ifStat() {return stat;}
+|	stat = whileStat() {return stat;}
+|	stat = doWhile() {return stat;}
+|	stat = forStat() {return stat;}
+|	stat = returnStat() <SEMICOLON> {return stat;}
+|	name = <SEMICOLON> {return new ASTEmptyStatement(name.beginLine);}
+}
+
+ASTReturnStatement returnStat():
+{ASTExpression expr; Token t;}
+{
+	t = <RETURN> (expr = orExp() {return new ASTReturnStatement(expr, expr.line());}| 
+				{return new ASTReturnStatement(null, t.beginLine);})
+}
+
+ASTForStatement forStat():
+{ASTStatement init; ASTExpression test; ASTStatement inc; ASTStatement body; Token start;}
+{
+	start = <FOR> <LEFT_PARENTHESIS> init = forInit(start) <SEMICOLON> test = orExp() <SEMICOLON> 
+		inc = forInit(start) <RIGHT_PARENTHESIS> body = thenStat()
+		{return new ASTForStatement(init, test, inc, body, start.beginLine);}
+}
+
+ASTStatement forInit(Token start):
+{Token name; ASTBaseVariable var; ASTStatement stat;}
+{
+	name = <IDENTIFIER> {var = new ASTBaseVariable(name.image, name.beginLine);} 
+						(stat = varDecStat(name) | 
+						 stat = incStat(var) | 
+						 stat = assignStat(var)) {return stat;}
+|	{return new ASTEmptyStatement(start.beginLine);}
+}
+
+ASTDoWhileStatement doWhile():
+{ASTExpression test; ASTStatement body; Token start;}
+{
+	start = <DO> body = thenStat() <WHILE> <LEFT_PARENTHESIS> test = orExp() <RIGHT_PARENTHESIS> <SEMICOLON>
+	{return new ASTDoWhileStatement(test, body, start.beginLine);}
+}
+
+ASTWhileStatement whileStat():
+{ASTExpression test; ASTStatement body; Token start;}
+{
+	start = <WHILE> <LEFT_PARENTHESIS> test = orExp() <RIGHT_PARENTHESIS> body = thenStat()
+	{return new ASTWhileStatement(test, body, start.beginLine);}
+}
+
+ASTStatement ifStat():
+{Token start; ASTExpression expr; ASTStatement thenState; ASTStatement elseState;}
+{
+	start = <IF> <LEFT_PARENTHESIS> expr = orExp() <RIGHT_PARENTHESIS> 
+		thenState = thenStat() elseState = elseStat() 
+		{return new ASTIfStatement(expr, thenState, elseState, start.beginLine);}
+}
+
+ASTStatement thenStat():
+{ASTStatement stat;}
+{
+	stat = funcDef() {return stat;}
+|	stat = statement() {return stat;}
+}
+
+ASTStatement elseStat():
+{ASTStatement stat;}
+{
+	<ELSE> stat = thenStat() {return stat;}
+|	{return null;}
+}
+
+ASTStatement statementS(Token name):
+{ASTStatement stat; ASTVariable var;}
+{
+	var = expressionS(new ASTBaseVariable(name.image, name.beginLine)) 
+	(stat = assignStat(var) | stat = incStat(var)) {return stat;}
+|	stat = varDecStat(name) {return stat;}
+|	stat = funcCallStat(name) {return stat;}
+}
+
+ASTFunctionCallStatement funcCallStat(Token name):
+{ASTFunctionCallStatement fcStat = new ASTFunctionCallStatement(name.image, name.beginLine);}
+{
+	<LEFT_PARENTHESIS> fcStat = expListS(fcStat) <RIGHT_PARENTHESIS> {return fcStat;}
+}
+
+ASTFunctionCallStatement expListS(ASTFunctionCallStatement fcStat):
+{ASTExpression expr;}
+{
+	expr = orExp() {fcStat.addElement(expr);} fcStat = expListSS(fcStat) {return fcStat;}
+|	{return fcStat;}
+}
+
+ASTFunctionCallStatement expListSS(ASTFunctionCallStatement fcStat):
+{}
+{
+	<COMMA> fcStat = expListS(fcStat) {return fcStat;}
+|	{return fcStat;}	
+}
+
+ASTVariableDefStatement varDecStat(Token type):
+{Token name; int arrDim = 0; ASTExpression expr;}
+{
+	name = <IDENTIFIER> arrDim = arrayDim(arrDim) 
+	(expr = varDecAssign() 
+		{return new ASTVariableDefStatement(type.image, name.image, arrDim, expr, type.beginLine);}| 
+	{return new ASTVariableDefStatement(type.image, name.image, arrDim, type.beginLine);})
+}
+
+ASTExpression varDecAssign():
+{ASTExpression expr;}
+{
+	<GETS> (expr = orExp() | expr = newExp()) {return expr;}
+}
+
+ASTAssignmentStatement assignStat(ASTVariable var):
+{ASTExpression expr;}
+{
+	<GETS> (expr = orExp() | expr = newExp()) 
+	{return new ASTAssignmentStatement(var, expr, var.line());}
+}
+
+ASTStatement incStat(ASTVariable var):
+{ASTVariableExpression varExp = new ASTVariableExpression(var, var.line()); 
+	ASTIntegerLiteral intLit = new ASTIntegerLiteral(1, var.line()); ASTOperatorExpression opExp;}
+{
+	<INC_UP> {opExp = new ASTOperatorExpression(varExp, intLit, "+", var.line());
+				return new ASTAssignmentStatement(var, opExp, var.line());}
+|	<INC_DOWN>	{opExp = new ASTOperatorExpression(varExp, intLit, "-", var.line());
+					return new ASTAssignmentStatement(var, opExp, var.line());}
+}
+
+ASTExpression newExp():
+{Token type; ASTExpression expr;}
+{
+	<NEW> type = <IDENTIFIER> expr = newExpS(type) {return expr;}
+}
+
+ASTExpression newExpS(Token type):
+{ASTExpression expr;}
+{
+	newClass() {return new ASTNewClassExpression(type.image, type.beginLine);}
+|	expr = newArray(type) {return expr;}
+}
+
+void newClass():
+{}
+{
+	<LEFT_PARENTHESIS> <RIGHT_PARENTHESIS>
+}
+
+ASTNewArrayExpression newArray(Token type):
+{ASTExpression elems; int arrDim = 1;}
+{
+	<LEFT_SQUARE_BRACE> elems = orExp() <RIGHT_SQUARE_BRACE> arrDim = arrayDim(arrDim)
+	{return new ASTNewArrayExpression(type.image, elems, arrDim, type.beginLine);}
+}
+
+void newArrayS():
+{}
+{
+	<LEFT_SQUARE_BRACE> <RIGHT_SQUARE_BRACE> newArrayS()
+|	{}
+}
+
+ASTExpression orExp():
+{ASTExpression expr;}
+{
+	expr = andExp() expr = orExpS(expr) {return expr;}
+}
+
+ASTExpression orExpS(ASTExpression left):
+{ASTExpression right; Token opr;}
+{
+	opr = <OR> right = orExp() {return new ASTOperatorExpression(left, right, opr.image, left.line());}
+|	{return left;}
+}
+
+ASTExpression andExp():
+{ASTExpression expr;}
+{
+	expr = notExp() expr = andExpS(expr) {return expr;}
+}
+
+ASTExpression andExpS(ASTExpression left):
+{ASTExpression right; Token opr;}
+{
+	opr = <AND> right = andExp() {return new ASTOperatorExpression(left, right, opr.image, left.line());}
+|	{return left;}
+}
+
+ASTExpression notExp():
+{Token t; ASTExpression expr;}
+{
+	t = <NOT> expr = compExp() {return new ASTUnaryOperatorExpression(expr, t.image, t.beginLine);}
+|	expr = compExp() {return expr;}
+
+}
+
+ASTExpression compExp():
+{ASTExpression expr;}
+{
+	expr = addExp() expr = compExpS(expr) {return expr;}
+}
+
+ASTExpression compExpS(ASTExpression left):
+{ASTExpression right; Token opr;}
+{
+	(opr = <EQUALS> | opr = <NOT_EQUALS> | opr = <GREATER_THAN> | opr = <GREATER_THAN_OR_EQUAL> |
+		opr = <LESS_THAN> | opr = <LESS_THAN_OR_EQUAL>) right = compExp()
+		{return new ASTOperatorExpression(left, right, opr.image, left.line());}
+|	{return left;}
+}
+
+ASTExpression addExp():
+{ASTExpression expr;}
+{
+	expr = multExp() expr = addExpS(expr) {return expr;}
+}
+
+ASTExpression addExpS(ASTExpression left):
+{ASTExpression right; Token opr;}
+{
+	(opr = <PLUS> | opr = <MINUS>) right = addExp()
+		{return new ASTOperatorExpression(left, right, opr.image, left.line());}
+|	{return left;}
+}
+
+ASTExpression multExp():
+{ASTExpression expr;}
+{
+	expr = unaryMin() expr = multExpS(expr) {return expr;}	
+}
+
+ASTExpression multExpS(ASTExpression left):
+{ASTExpression right; Token opr;}
+{
+	(opr = <DIVIDE> | opr = <TIMES>) right = multExp()
+		{return new ASTOperatorExpression(left, right, opr.image, left.line());}
+|	{return left;}
+}
+
+ASTExpression unaryMin():
+{ASTExpression expr; ASTIntegerLiteral zero = new ASTIntegerLiteral(0, 0); Token t;}
+{
+	<MINUS> expr = expression() 
+		{return new ASTOperatorExpression(zero, expr, "-", expr.line());}
+|	expr = expression() {return expr;}
+}
+
+ASTExpression expression():
+{ASTExpression expr; ASTVariable var; Token name;}
+{
+	expr = constant() {return expr;}
+|	name = <IDENTIFIER> (expr = funcCallExp(name) {return expr;} | 
+			var = expressionS(new ASTBaseVariable(name.image, name.beginLine)) {return new ASTVariableExpression(var, name.beginLine);})
+|	<LEFT_PARENTHESIS> expr = orExp() <RIGHT_PARENTHESIS> {return expr;}
+}
+
+ASTExpression constant():
+{Token t;}
+{
+	t = <INTEGER_LITERAL> {return new ASTIntegerLiteral(Integer.parseInt(t.image), t.beginLine);}
+|	t = <TRUE> {return new ASTBooleanLiteral(true, t.beginLine);}
+|	t = <FALSE> {return new ASTBooleanLiteral(false, t.beginLine);}
+}
+
+ASTVariable expressionS(ASTVariable var):
+{}
+{
+	var = arrayVar(var) {return var;}
+|	var = classVar(var) {return var;}
+|	{return var;}
+}
+
+ASTVariable arrayVar(ASTVariable var):
+{ASTExpression expr;}
+{
+	<LEFT_SQUARE_BRACE> expr = orExp() <RIGHT_SQUARE_BRACE> 
+	var = expressionS(new ASTArrayVariable(var, expr, var.line())) {return var;}
+}
+
+ASTVariable classVar(ASTVariable var):
+{Token name;}
+{
+	<DOT> name = <IDENTIFIER> 
+	var = expressionS(new ASTClassVariable(var, name.image, name.beginLine)) {return var;}
+
+}
+
+ASTFunctionCallExpression funcCallExp(Token name):
+{ASTFunctionCallExpression fcExpr = new ASTFunctionCallExpression(name.image, name.beginLine);}
+{
+	<LEFT_PARENTHESIS> fcExpr = expListE(fcExpr) <RIGHT_PARENTHESIS> {return fcExpr;}
+}
+
+ASTFunctionCallExpression expListE(ASTFunctionCallExpression fcExpr):
+{ASTExpression expr;}
+{
+	expr = orExp() {fcExpr.addElement(expr);} fcExpr = expListES(fcExpr) {return fcExpr;}
+|	{return fcExpr;}
+}
+
+ASTFunctionCallExpression expListES(ASTFunctionCallExpression fcExpr):
+{}
+{
+	<COMMA> fcExpr = expListE(fcExpr) {return fcExpr;}
+|	{return fcExpr;}	
+}
+
