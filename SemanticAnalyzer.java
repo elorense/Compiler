@@ -1,3 +1,8 @@
+/* Author:  Edric Orense
+ * File:    SemanticAnalyzer.java
+ * Purpose: Goes through a SimpleJava file and checks for semantic errors
+ */
+
 import java.util.Vector;
 
 public class SemanticAnalyzer implements ASTVisitor {
