@@ -1,3 +1,8 @@
+/* Author:  Edric Orense
+ * File:    AATBuilTree.java
+ * Purpose: Creates Abstract Assembly Trees
+ */
+
 import java.util.Vector;
 
 public class AATBuildTree {
@@ -7,7 +12,9 @@ public class AATBuildTree {
     private AATRegister fpReg = new AATRegister(Register.FP());
     private AATRegister spReg = new AATRegister(Register.SP());
     private AATRegister retReg = new AATRegister(Register.ReturnAddr());
-
+	
+	
+    //AAT Tree for function definitions
     public AATStatement functionDefinition(AATStatement body, int framesize, Label start,  
 					   Label end) {
 
